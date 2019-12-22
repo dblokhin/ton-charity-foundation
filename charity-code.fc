@@ -1,0 +1,155 @@
+;; Dmitriy Blokhin (sv.dblokhin@gmail.com)
+;; Charity Foundation Contract
+
+;; storage$_ seqno:uint32 pubkey:uint256 campaigns:(HashmapE 32 campaign)  {log ???}
+;; campaign$_ expired:uint32 goal:Grams transferred:Grams min_amount:Grams multiplier:uint8 address:MsgAddressInt = Campaign
+
+_ unpack_campaign(ds) {
+    return (ds~load_uint(32), ds~load_grams(), ds~load_grams(), ds~load_grams(), ds~load_uint(8), ds~load_msg_addr());
+}
+
+builder pack_campaign(expired, goal, transferred, min_amount, multiplier, address) {
+    return begin_cell()
+        .store_uint(expired, 32)
+        .store_grams(goal)
+        .store_grams(transferred)
+        .store_grams(min_amount)
+        .store_int(multiplier, 8)
+        .store_slice(address);
+}
+
+;; free expired campaigns
+(cell, ()) ~free_expired(cell campaigns) impure {
+    var key = 0;
+    do {
+        (key, var cs, int ok) = campaigns.udict_get_next?(32, key);
+        if (ok) {
+            ;; expiry <= now
+            if (cs.preload_uint(32) <= now()) {
+                campaigns~udict_delete?(32, key);
+            }
+        }
+    } until (~ ok);
+
+  return (campaigns, ());
+}
+
+() sendValue(dest, value, mode) impure {
+    ;;addr_std$10 anycast:(Maybe Anycast) workchain_id:int8 address:bits256  = MsgAddressInt;
+    ;;int_msg_info$0 ihr_disabled:Bool bounce:Bool bounced:Bool
+    ;;  src:MsgAddress dest:MsgAddressInt
+    ;;  value:CurrencyCollection ihr_fee:Grams fwd_fee:Grams
+    ;;  created_lt:uint64 created_at:uint32 = CommonMsgInfoRelaxed;
+
+    ;; <b b{01} s, bounce 1 i, b{000100} s, dest_addr addr, amount Gram, 0 9 64 32 + + 1+ u,
+    ;;  body-cell <s 2dup s-fits? not rot over 1 i, -rot { drop body-cell ref, } { s, } cond
+    ;; b>
+
+    send_raw_message(begin_cell()
+        .store_uint(0x10, 6)
+        .store_slice(dest)
+        .store_grams(value)
+        .store_uint(0, 9 + 64 + 32 + 1 + 1)
+        .store_uint(0, 32) ;; whatever
+        .end_cell(),
+    mode);
+}
+
+;; msg_body$_ camp_id:uint32
+() recv_internal(int msg_value, cell msg_cell, slice msg_body) impure {
+    ;; check the bounced field
+    var msg_s = msg_cell.begin_parse();
+    var flags = msg_s~load_uint(4);  ;; int_msg_info$0 ihr_disabled:Bool bounce:Bool bounced:Bool
+    if (flags & 1) {
+        return ();
+    }
+
+    var camp_id = msg_body~load_uint(32);
+    if ((camp_id == 0) | msg_body.slice_empty?()) {
+        ;; just fund to Charity Foundation contract
+        return ();
+    }
+
+    slice storage = get_data().begin_parse();
+    var (seqno, pubkey, campaigns) = (storage~load_uint(32), storage~load_uint(256), storage~load_dict());
+    campaigns~free_expired();
+
+    ;; get the campaign data
+    var (campaign, ok) = campaigns.udict_get?(32, camp_id);
+    throw_unless(37, ok); ;; Throw if campaign doesn't exist
+    var (expired, goal, transferred, min_amount, multiplier, address) = campaign.unpack_campaign();
+
+    ;; calc the value to be sent
+    int balance = get_balance().first();
+    int value = max(msg_value * multiplier, min_amount);
+    value = min(value, balance);
+    value = max(min(value, goal - transferred), msg_value); ;; rich exactly the goal (but send at least the user value)
+    sendValue(address, value, 3);
+
+    ;; update campaign
+    transferred = transferred + value;
+    if (goal <= transferred) {
+        campaigns~udict_delete?(32, camp_id); ;; stop campaign, the goal is reached
+    } else {
+        campaigns~udict_set_builder(32, camp_id, pack_campaign(expired, goal, transferred, min_amount, multiplier, address));
+    }
+
+    ;; Update the state
+    set_data(begin_cell().store_uint(seqno, 32).store_uint(pubkey, 256).store_dict(campaigns).end_cell());
+}
+
+;; msg$_ signature:Signature seqno:uint32 body:ContractBodyRequest
+;; msg_initial$00 = ContractBodyRequest
+;; msg_register$01 expired:uint32 goal:Grams min_amount:Grams multiplier:uint8 address:MsgAddressInt = ContractBodyRequest
+;; msg_remove$10 camp_id:uint32 = ContractBodyRequest
+;; msg_withdraw$11 amount:Grams address:MsgAddressInt = ContractBodyRequest
+() recv_external (slice in_msg) impure {
+    var msg = in_msg~load_ref().begin_parse();
+    var signature = msg~load_bits(512);
+    var cs = msg;
+    var (msg_seqno, msg_type) = (cs~load_uint(32), cs~load_uint(2));
+
+    slice storage = get_data().begin_parse();
+    var (seqno, pubkey, campaigns) = (storage~load_uint(32), storage~load_uint(256), storage~load_dict());
+
+    throw_unless(33, msg_seqno == seqno);
+    throw_unless(34, check_signature(slice_hash(msg), signature, pubkey));
+    set_gas_limit(100000);
+
+    if (msg_type == 0) {
+        ;; just initial
+        throw_unless(32, msg_seqno == 0);
+    } elseif (msg_type == 1) {
+        ;; register new campaign
+        var (expired, goal, min_amount, multiplier, address) = (cs~load_uint(32), cs~load_grams(), cs~load_grams(), cs~load_uint(8), cs~load_msg_addr());
+        campaigns~udict_set_builder(32, seqno, pack_campaign(expired, goal, 0, min_amount, multiplier, address)); ;; seqno is used as a key of campaigns dict; dirty, but okey
+    } elseif (msg_type == 2) {
+        ;; stop campaign with checking existence
+        var camp_id = cs~load_uint(32);
+        var (campaign, ok) = campaigns.udict_get?(32, camp_id);
+        throw_unless(37, ok); ;; throw if campaign doesn't exist
+        campaigns~udict_delete?(32, camp_id);
+    } elseif (msg_type == 3) {
+        ;; just send
+        var (amount, address) = (cs~load_grams(), cs~load_msg_addr());
+        sendValue(address, amount, 3);
+    }
+    cs.end_parse();
+    accept_message();
+
+    ;; Update the storage
+    set_data(begin_cell().store_uint(seqno + 1, 32).store_uint(pubkey, 256).store_dict(campaigns).end_cell());
+}
+
+;; Get methods
+
+int seqno() method_id {
+  return get_data().begin_parse().preload_uint(32);
+}
+
+cell campaigns() method_id {
+  var storage = get_data().begin_parse();
+  var (seqno, pubkey, campaigns) = (storage~load_uint(32), storage~load_uint(256), storage~load_dict());
+  return campaigns;
+}
+

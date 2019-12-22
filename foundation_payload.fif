@@ -1,0 +1,21 @@
+// DONT'T USE THIS FILE. USE THE `foundation.fif` INSTEAD
+// invoked as `payload <camp-id>`
+
+// stops the program on invalid params
+{
+  ."invalid expiration option" cr
+  2 halt
+} : invalid_expiration
+
+// Parse cmdline
+$# 2 < ' invalid_options if
+$2 parse-int =: camp-id
+
+."Create payload message for campaign ID:  " camp-id . cr
+
+// CREATE THE MESSAGE:
+// msg_body$_ camp_id:uint32
+<b camp-id 32 u, b> 2 boc+>B
+
+"campaign-" $2 $+ +".boc" tuck B>file
+."(Saved creating query to file " type .")" cr

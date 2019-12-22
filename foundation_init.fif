@@ -1,0 +1,45 @@
+// DONT'T USE THIS FILE. USE THE `foundation.fif` INSTEAD
+// invoked as `init <filename-base> <foundation-name> <workchain-id>`
+
+// Parse cmdline
+$# 4 = ' invalid_options ifnot
+$2 =: filename-base
+$3 =: foundation-name
+$4 parse-workchain-id =: workchain-id
+
+filename-base +".pk" load-keypair
+constant wallet_pk
+constant wallet_pubk
+0 constant seqnum
+
+// Pubkeys dictionary
+<b constant empty_builder
+
+."Creating new Charity Foundation smart contract in workchain: " workchain-id . cr
+
+// CREATE THE CODE
+"code.fif" include constant code
+
+// CREATE THE STORAGE
+<b 0 32 u, wallet_pubk B, dictnew dict, b> constant storage
+
+// Push the smc code
+// Push the data
+// no libraries
+// code storage null
+<b b{0011} s, code ref, storage ref, null dict, b> constant init // create StateInit
+
+init hashu workchain-id swap 2dup 2constant wallet_addr
+."foundation wallet address = " 2dup .addr cr
+2dup foundation-name +".addr" save-address-verbose
+."Non-bounceable address (for init): " 2dup 7 .Addr cr
+."Bounceable address (for later access): " 6 .Addr cr
+
+// CREATE THE MESSAGE: msg$_ signature:Signature seqno:uint32 body:ContractBodyRequest
+<b seqnum 32 u, 0 2 u, b> constant msg-body  // with prepended seqno
+msg-body hashu wallet_pk ed25519_sign_uint constant sig-msg-body
+<b sig-msg-body B, msg-body <s s, b> constant external-msg
+<b b{1000100} s, wallet_addr addr, b{000010} s, init <s s, b{0} s, external-msg ref, b>
+2 boc+>B cr
+"foundation-create-query.boc" tuck B>file
+."(Saved wallet creating query to file " type .")" cr

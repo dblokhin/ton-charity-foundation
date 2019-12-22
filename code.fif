@@ -1,0 +1,281 @@
+// automatically generated from `stdlib.fc` `charity-code.fc` 
+PROGRAM{
+  DECLPROC unpack_campaign
+  DECLPROC pack_campaign
+  DECLPROC ~free_expired
+  DECLPROC sendValue
+  DECLPROC recv_internal
+  DECLPROC recv_external
+  85143 DECLMETHOD seqno
+  90756 DECLMETHOD campaigns
+  unpack_campaign PROC:<{
+    //  ds
+    32 LDU	//  _1 ds
+    LDGRAMS	//  _1 _4 ds
+    LDGRAMS	//  _1 _4 _6 ds
+    LDGRAMS	//  _1 _4 _6 _8 ds
+    8 LDU	//  _1 _4 _6 _8 _10 ds
+    LDMSGADDR	//  _1 _4 _6 _8 _10 _26 _25
+    DROP	//  _1 _4 _6 _8 _10 _13
+  }>
+  pack_campaign PROC:<{
+    //  expired goal transferred min_amount multiplier address
+    NEWC	//  expired goal transferred min_amount multiplier address _6
+    s1 s6 XCHG	//  address goal transferred min_amount multiplier expired _6
+    32 STU	//  address goal transferred min_amount multiplier _8
+    s0 s4 XCHG2	//  address multiplier transferred min_amount _8 goal
+    STGRAMS	//  address multiplier transferred min_amount _9
+    ROT	//  address multiplier min_amount _9 transferred
+    STGRAMS	//  address multiplier min_amount _10
+    SWAP	//  address multiplier _10 min_amount
+    STGRAMS	//  address multiplier _11
+    8 STI	//  address _13
+    SWAP	//  _13 address
+    STSLICER	//  _14
+  }>
+  ~free_expired PROC:<{
+    //  campaigns
+    0 PUSHINT	//  campaigns key=0
+    UNTIL:<{
+      OVER
+      32 PUSHINT	//  campaigns key campaigns _5=32
+      DICTUGETNEXT
+      NULLSWAPIFNOT
+      NULLSWAPIFNOT	//  campaigns cs key ok
+      DUP	//  campaigns cs key ok ok
+      IF:<{	//  campaigns cs key ok
+        s0 s2 XCHG	//  campaigns ok key cs
+        32 PLDU	//  campaigns ok key _8
+        NOW	//  campaigns ok key _8 _9
+        LEQ	//  campaigns ok key _10
+        IF:<{	//  campaigns ok key
+          32 PUSHINT	//  campaigns ok key _12=32
+          s1 s3 s3 PUXC2	//  key ok key campaigns _12=32
+          DICTUDEL	//  key ok _18 _19
+          DROP	//  key ok campaigns
+        }>ELSE<{
+          s0 s2 XCHG	//  key ok campaigns
+        }>
+      }>ELSE<{
+        2SWAP
+        DROP	//  key ok campaigns
+      }>
+      SWAP	//  key campaigns ok
+      NOT	//  key campaigns _14
+      s1 s2 XCHG	//  campaigns key _14
+    }>	//  campaigns key
+    DROP	//  campaigns
+  }>
+  sendValue PROC:<{
+    //  dest value mode
+    0 PUSHINT	//  dest value mode _3=0
+    DUP	//  dest value mode _3=0 _4=0
+    16 PUSHINT	//  dest value mode _3=0 _4=0 _5=16
+    NEWC	//  dest value mode _3=0 _4=0 _5=16 _6
+    6 STU	//  dest value mode _3=0 _4=0 _8
+    s0 s5 XCHG2	//  _4=0 value mode _3=0 _8 dest
+    STSLICER	//  _4=0 value mode _3=0 _9
+    s0 s3 XCHG2	//  _4=0 _3=0 mode _9 value
+    STGRAMS	//  _4=0 _3=0 mode _10
+    s1 s3 XCHG	//  mode _3=0 _4=0 _10
+    107 STU	//  mode _3=0 _20
+    32 STU	//  mode _22
+    ENDC	//  mode _23
+    SWAP	//  _23 mode
+    SENDRAWMSG
+  }>
+  recv_internal PROC:<{
+    //  msg_value msg_cell msg_body
+    SWAP	//  msg_value msg_body msg_cell
+    CTOS	//  msg_value msg_body msg_s
+    4 LDU	//  msg_value msg_body _78 _77
+    DROP	//  msg_value msg_body flags
+    1 PUSHINT	//  msg_value msg_body flags _9=1
+    AND	//  msg_value msg_body _10
+    IFJMP:<{	//  msg_value msg_body
+      2DROP	// 
+    }>	//  msg_value msg_body
+    32 LDU	//  msg_value camp_id msg_body
+    OVER	//  msg_value camp_id msg_body camp_id
+    0 EQINT	//  msg_value camp_id msg_body _16
+    SWAP	//  msg_value camp_id _16 msg_body
+    SEMPTY	//  msg_value camp_id _16 _17
+    OR	//  msg_value camp_id _18
+    IFJMP:<{	//  msg_value camp_id
+      2DROP	// 
+    }>	//  msg_value camp_id
+    c4 PUSH	//  msg_value camp_id _20
+    CTOS	//  msg_value camp_id storage
+    32 LDU	//  msg_value camp_id _25 storage
+    256 LDU	//  msg_value camp_id _25 _28 storage
+    LDDICT	//  msg_value camp_id _25 _28 _86 _85
+    DROP	//  msg_value camp_id seqno pubkey campaigns
+    ~free_expired CALLDICT	//  msg_value camp_id seqno pubkey campaigns
+    s3 s0 PUSH2
+    32 PUSHINT	//  msg_value camp_id seqno pubkey campaigns camp_id campaigns _37=32
+    DICTUGET
+    NULLSWAPIFNOT	//  msg_value camp_id seqno pubkey campaigns campaign ok
+    37 THROWIFNOT
+    unpack_campaign CALLDICT	//  msg_value camp_id seqno pubkey campaigns expired goal transferred min_amount multiplier address
+    BALANCE	//  msg_value camp_id seqno pubkey campaigns expired goal transferred min_amount multiplier address _49
+    FIRST	//  msg_value camp_id seqno pubkey campaigns expired goal transferred min_amount multiplier address balance
+    s11 s2 PUSH2	//  msg_value camp_id seqno pubkey campaigns expired goal transferred min_amount multiplier address balance msg_value multiplier
+    MUL	//  msg_value camp_id seqno pubkey campaigns expired goal transferred min_amount multiplier address balance _52
+    s4 PUSH	//  msg_value camp_id seqno pubkey campaigns expired goal transferred min_amount multiplier address balance _52 min_amount
+    MAX	//  msg_value camp_id seqno pubkey campaigns expired goal transferred min_amount multiplier address balance value
+    SWAP	//  msg_value camp_id seqno pubkey campaigns expired goal transferred min_amount multiplier address value balance
+    MIN	//  msg_value camp_id seqno pubkey campaigns expired goal transferred min_amount multiplier address value
+    s5 s4 PUSH2	//  msg_value camp_id seqno pubkey campaigns expired goal transferred min_amount multiplier address value goal transferred
+    SUB	//  msg_value camp_id seqno pubkey campaigns expired goal transferred min_amount multiplier address value _55
+    MIN	//  msg_value camp_id seqno pubkey campaigns expired goal transferred min_amount multiplier address _56
+    s0 s11 XCHG2	//  address camp_id seqno pubkey campaigns expired goal transferred min_amount multiplier _56 msg_value
+    MAX	//  address camp_id seqno pubkey campaigns expired goal transferred min_amount multiplier value
+    s10 s0 PUSH2
+    3 PUSHINT	//  address camp_id seqno pubkey campaigns expired goal transferred min_amount multiplier value address value _58=3
+    sendValue CALLDICT
+    s1 s3 XCHG	//  address camp_id seqno pubkey campaigns expired goal multiplier min_amount transferred value
+    ADD	//  address camp_id seqno pubkey campaigns expired goal multiplier min_amount transferred
+    s3 s0 PUSH2	//  address camp_id seqno pubkey campaigns expired goal multiplier min_amount transferred goal transferred
+    LEQ	//  address camp_id seqno pubkey campaigns expired goal multiplier min_amount transferred _61
+    IF:<{	//  address camp_id seqno pubkey campaigns expired goal multiplier min_amount transferred
+      5 BLKDROP
+      s4 POP	//  campaigns camp_id seqno pubkey
+      s2 s3 XCHG2
+      32 PUSHINT	//  pubkey seqno camp_id campaigns _63=32
+      DICTUDEL	//  pubkey seqno _95 _96
+      DROP	//  pubkey seqno campaigns
+    }>ELSE<{	//  address camp_id seqno pubkey campaigns expired goal multiplier min_amount transferred
+      s4 s5 XCHG
+      s3 s4 XCHG
+      s2 s3 XCHG2
+      s0 s9 XCHG	//  campaigns camp_id seqno pubkey expired goal transferred min_amount multiplier address
+      pack_campaign CALLDICT	//  campaigns camp_id seqno pubkey _66
+      s0 s3 s4 XCHG3
+      32 PUSHINT	//  seqno pubkey _66 camp_id campaigns _67=32
+      DICTUSETB	//  seqno pubkey campaigns
+      s1 s2 XCHG	//  pubkey seqno campaigns
+    }>
+    NEWC	//  pubkey seqno campaigns _69
+    s1 s2 XCHG	//  pubkey campaigns seqno _69
+    32 STU	//  pubkey campaigns _71
+    s1 s2 XCHG	//  campaigns pubkey _71
+    256 STU	//  campaigns _73
+    STDICT	//  _74
+    ENDC	//  _75
+    c4 POP
+  }>
+  recv_external PROC:<{
+    //  in_msg
+    LDREF	//  _109 _108
+    DROP	//  _2
+    CTOS	//  msg
+    9 PUSHPOW2	//  msg _7=512
+    LDSLICEX	//  signature msg
+    DUP	//  signature msg cs
+    32 LDU	//  signature msg _12 cs
+    2 LDU	//  signature msg msg_seqno msg_type cs
+    c4 PUSH	//  signature msg msg_seqno msg_type cs _19
+    CTOS	//  signature msg msg_seqno msg_type cs storage
+    32 LDU	//  signature msg msg_seqno msg_type cs _24 storage
+    256 LDU	//  signature msg msg_seqno msg_type cs _24 _27 storage
+    LDDICT	//  signature msg msg_seqno msg_type cs _24 _27 _121 _120
+    DROP	//  signature msg msg_seqno msg_type cs seqno pubkey campaigns
+    s5 s2 PUSH2	//  signature msg msg_seqno msg_type cs seqno pubkey campaigns msg_seqno seqno
+    EQUAL	//  signature msg msg_seqno msg_type cs seqno pubkey campaigns _33
+    33 THROWIFNOT
+    s0 s6 XCHG	//  signature campaigns msg_seqno msg_type cs seqno pubkey msg
+    HASHSU	//  signature campaigns msg_seqno msg_type cs seqno pubkey _36
+    s0 s7 s7 XC2PU	//  pubkey campaigns msg_seqno msg_type cs seqno _36 signature pubkey
+    CHKSIGNU	//  pubkey campaigns msg_seqno msg_type cs seqno _37
+    34 THROWIFNOT
+    100000 PUSHINT	//  pubkey campaigns msg_seqno msg_type cs seqno _39=100000
+    SETGASLIMIT
+    s2 PUSH	//  pubkey campaigns msg_seqno msg_type cs seqno msg_type
+    0 EQINT	//  pubkey campaigns msg_seqno msg_type cs seqno _42
+    IF:<{	//  pubkey campaigns msg_seqno msg_type cs seqno
+      s2 POP	//  pubkey campaigns msg_seqno seqno cs
+      s0 s2 XCHG	//  pubkey campaigns cs seqno msg_seqno
+      0 EQINT	//  pubkey campaigns cs seqno _45
+      32 THROWIFNOT
+    }>ELSE<{	//  pubkey campaigns msg_seqno msg_type cs seqno
+      s3 POP	//  pubkey campaigns seqno msg_type cs
+      OVER	//  pubkey campaigns seqno msg_type cs msg_type
+      1 EQINT	//  pubkey campaigns seqno msg_type cs _48
+      IF:<{	//  pubkey campaigns seqno msg_type cs
+        NIP	//  pubkey campaigns seqno cs
+        32 LDU	//  pubkey campaigns seqno _54 cs
+        LDGRAMS	//  pubkey campaigns seqno _54 _57 cs
+        LDGRAMS	//  pubkey campaigns seqno _54 _57 _59 cs
+        8 LDU	//  pubkey campaigns seqno _54 _57 _59 _61 cs
+        LDMSGADDR	//  pubkey campaigns seqno expired goal min_amount multiplier address cs
+        s4 s5 XCHG
+        s3 s5 XCHG
+        0 PUSHINT
+        s6 s3 s3 XCHG3
+        s0 s6 XCHG	//  pubkey campaigns seqno cs expired goal _67=0 min_amount multiplier address
+        pack_campaign CALLDICT	//  pubkey campaigns seqno cs _68
+        SWAP
+        32 PUSHINT
+        s3 s4 s4 PUXC2	//  pubkey cs seqno _68 seqno campaigns _69=32
+        DICTUSETB	//  pubkey cs seqno campaigns
+      }>ELSE<{	//  pubkey campaigns seqno msg_type cs
+        OVER	//  pubkey campaigns seqno msg_type cs msg_type
+        2 EQINT	//  pubkey campaigns seqno msg_type cs _72
+        IF:<{	//  pubkey campaigns seqno msg_type cs
+          NIP	//  pubkey campaigns seqno cs
+          32 LDU	//  pubkey campaigns seqno camp_id cs
+          s1 s3 PUSH2
+          32 PUSHINT	//  pubkey campaigns seqno camp_id cs camp_id campaigns _79=32
+          DICTUGET
+          NULLSWAPIFNOT	//  pubkey campaigns seqno camp_id cs _134 _135
+          NIP	//  pubkey campaigns seqno camp_id cs ok
+          37 THROWIFNOT
+          s0 s3 XCHG
+          32 PUSHINT	//  pubkey cs seqno camp_id campaigns _84=32
+          DICTUDEL	//  pubkey cs seqno _136 _137
+          DROP	//  pubkey cs seqno campaigns
+        }>ELSE<{	//  pubkey campaigns seqno msg_type cs
+          SWAP	//  pubkey campaigns seqno cs msg_type
+          3 EQINT	//  pubkey campaigns seqno cs _87
+          IF:<{	//  pubkey campaigns seqno cs
+            LDGRAMS	//  pubkey campaigns seqno _90 cs
+            LDMSGADDR	//  pubkey campaigns seqno amount address cs
+            s0 s2 XCHG
+            3 PUSHINT	//  pubkey campaigns seqno cs address amount _94=3
+            sendValue CALLDICT
+          }>	//  pubkey campaigns seqno cs
+          s0 s2 XCHG	//  pubkey cs seqno campaigns
+        }>
+      }>
+      -ROT	//  pubkey campaigns cs seqno
+    }>
+    SWAP	//  pubkey campaigns seqno cs
+    ENDS
+    ACCEPT
+    INC	//  pubkey campaigns _99
+    NEWC	//  pubkey campaigns _99 _100
+    32 STU	//  pubkey campaigns _102
+    s1 s2 XCHG	//  campaigns pubkey _102
+    256 STU	//  campaigns _104
+    STDICT	//  _105
+    ENDC	//  _106
+    c4 POP
+  }>
+  seqno PROC:<{
+    // 
+    c4 PUSH	//  _0
+    CTOS	//  _1
+    32 PLDU	//  _3
+  }>
+  campaigns PROC:<{
+    // 
+    c4 PUSH	//  _1
+    CTOS	//  storage
+    32 LDU	//  _15 _14
+    NIP	//  storage
+    256 LDU	//  _17 _16
+    NIP	//  storage
+    LDDICT	//  _19 _18
+    DROP	//  campaigns
+  }>
+}END>c

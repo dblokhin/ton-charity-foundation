@@ -1,0 +1,57 @@
+#!/usr/bin/env fift -s
+"TonUtil.fif" include
+"Asm.fif" include
+
+{ ."   " } : tab
+{ tab tab } : 2tab
+
+{
+  ."Creates and manages Charity Foundation smart contract. Each incoming payment will be multiplied by specified campaign factor and sent to the destination." cr
+  ."Author: Dmitriy Blokhin" cr
+  ."Usage: "@' $0 type ." <command> <options...>" cr cr
+
+  tab ."`init <filename-base> <foundation-name> <workchain-id>`"  cr
+  tab ."Creates a new smart contract with specified <workchain-id>. Produces `<foundation-name>.addr` address file and `foundation-create-query.boc` to deploy smart contract."
+  ."`<filename-base>.pk` is a general file contains the user private and public keys, and it will be used to manage Charity Foundation smart contract. "
+  cr cr
+
+  tab ."`register <filename-base> <foundation-name> <seqno> <goal> <addr> [<multiplier> <expired> <min_amount>]`" cr
+  tab ."Registers new charity campaign with specified `goal` (amount of Grams to want to achieve) and destination address using `<filename-base>.pk` private key file. "
+  ."Each incoming payment will be multiplied by specified `multiplier` (default 4) and than will be sent to the destination. `min_amount` (default 0, means don't use) sets the minimal amount of grams should be send despite multiplied value is less than this value. "
+  ."`expired` (default now() + 1 month) is a expiration Unix time after which the campaign will be closed."
+  cr cr
+
+  tab ."`remove <filename-base> <foundation-name> <seqno> <camp-id>`" cr
+  tab ."Removes specified campaign." cr cr
+
+  tab ."`withdraw <filename-base> <foundation-name> <seqno> <amount> <addr>` " cr
+  tab ."Just a regular payment order of smc: sends `amount` grams to the `addr` destination." cr cr
+
+  tab ."`payload <campaign-id>` " cr
+  tab ."Creates a message payload `campaign-<campaign-id>.boc` file that the user have to attach when sending money to the given campaign <campaign-id> using a regular wallet." cr cr
+  1 halt
+} : usage
+
+{
+  ."Options are invalid. See usage"
+  cr
+  1 halt
+} : invalid_options
+
+$# 1 < ' usage if
+
+{
+  "foundation_" $1 $+ +".fif" include
+   0 halt
+} : run_command
+
+$1 "init" $= ' run_command if
+$1 "register" $= ' run_command if
+$1 "remove" $= ' run_command if
+$1 "withdraw" $= ' run_command if
+$1 "payload" $= ' run_command if
+$1 "-h" $= ' usage if
+
+."error: unrecognized command" cr
+1 halt
+

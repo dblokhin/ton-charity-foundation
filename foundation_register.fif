@@ -1,0 +1,48 @@
+// DONT'T USE THIS FILE. USE THE `foundation.fif` INSTEAD
+// invoked as `register <filename-base> <foundation-name> <seqno> <goal> <addr> [<multiplier> <expired> <min_amount>]`
+
+// stops the program on invalid params
+{
+  ."invalid expiration option" cr
+  2 halt
+} : invalid_expiration
+
+2592000 constant month_in_seconds
+
+// Parse cmdline
+$# 6 < ' invalid_options if
+$2 =: filename-base
+$3 =: foundation-name
+$4 parse-int =: seqnum
+$5 $>GR =: goal
+$6 parse-smc-addr constant bounce? constant dest-addr constant wc
+
+def? $7 { @' $7 parse-int } { 4 } cond constant multiplier
+def? $8 { @' $8 parse-int } { now month_in_seconds + } cond constant expiration
+def? $9 { @' $9 $>GR } { 0 } cond constant min_amount
+
+expiration 32 fits ' invalid_expiration ifnot
+expiration now <= ' invalid_expiration if
+
+filename-base +".pk" load-keypair
+constant wallet_pk
+constant wallet_pubk
+
+foundation-name +".addr" load-address 2constant wallet_addr
+."Create new campaign with"  cr
+tab ."Destination address: " $6 type  cr
+tab ."Goal: " goal (.GR) ."GR$" type space cr
+tab ."Multiplier: " multiplier . cr
+tab ."Expired: " expiration . cr
+tab ."Minimal amount: " min_amount (.GR) ."GR$" type space  cr
+
+// CREATE THE MESSAGE:
+// msg$_ signature:Signature seqno:uint32 body:ContractBodyRequest
+// msg_register$01 expired:uint32 goal:Grams min_amount:Grams multiplier:uint8 address:MsgAddressInt = ContractBodyRequest
+<b seqnum 32 u, 1 2 u, expiration 32 u, goal Gram, min_amount Gram, multiplier 8 u, b{100} s, wc dest-addr addr, b> constant msg-body
+msg-body hashu wallet_pk ed25519_sign_uint constant sig-msg-body
+<b sig-msg-body B, msg-body <s s, b> constant external-msg
+<b b{1000100} s, wallet_addr addr, 0 Gram, b{00} s, external-msg ref, b>
+2 boc+>B  cr
+"register-campaign.boc" tuck B>file
+."(Saved creating query to file " type .")" cr
